@@ -4,6 +4,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdioBridge.Client", "Stdio
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestClient", "TestClient\TestClient.csproj", "{04402D00-65E2-4EBE-AD18-6C5EC10E14DE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdioBridge.Api", "StdioBridge.Api\StdioBridge.Api.csproj", "{97E13254-9AF9-455F-8770-C5AF072C3560}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApi", "TestApi\TestApi.csproj", "{3B40347A-9280-4740-9136-AB24A59B0C4D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +22,13 @@ Global
 		{04402D00-65E2-4EBE-AD18-6C5EC10E14DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{04402D00-65E2-4EBE-AD18-6C5EC10E14DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{04402D00-65E2-4EBE-AD18-6C5EC10E14DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{97E13254-9AF9-455F-8770-C5AF072C3560}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{97E13254-9AF9-455F-8770-C5AF072C3560}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{97E13254-9AF9-455F-8770-C5AF072C3560}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{97E13254-9AF9-455F-8770-C5AF072C3560}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3B40347A-9280-4740-9136-AB24A59B0C4D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3B40347A-9280-4740-9136-AB24A59B0C4D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3B40347A-9280-4740-9136-AB24A59B0C4D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3B40347A-9280-4740-9136-AB24A59B0C4D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
