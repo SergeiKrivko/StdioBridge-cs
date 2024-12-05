@@ -22,7 +22,51 @@ internal class Handler
         }
     }
 
-    public Task<object?> Call(string data, Dictionary<string, string> pathParams, Dictionary<string, string> queryParams)
+    public async Task<object?> Call(string data, Dictionary<string, string> pathParams,
+        Dictionary<string, string> queryParams)
+    {
+        var parameters = GetParameters(data, pathParams, queryParams);
+        if (_method.ReturnType.IsAssignableTo(typeof(Task)))
+        {
+            var task = _method.Invoke(_controller, parameters) ?? throw new Exception("Invalid return type");
+            return await ExecuteTask(task);
+        }
+
+        if (_method.ReturnType.IsAssignableTo(typeof(IAsyncEnumerable<object?>)))
+        {
+            var enumerator = _method.Invoke(_controller, parameters) as IAsyncEnumerable<object?> ??
+                             throw new Exception("Invalid return type");
+            return await JoinEnumerator(enumerator);
+        }
+
+        return await Task.Run(() => _method.Invoke(_controller, parameters));
+    }
+
+    public async IAsyncEnumerable<object?> CallStream(string data, Dictionary<string, string> pathParams,
+        Dictionary<string, string> queryParams)
+    {
+        var parameters = GetParameters(data, pathParams, queryParams);
+        if (_method.ReturnType.IsAssignableTo(typeof(Task)))
+        {
+            var task = _method.Invoke(_controller, parameters) ?? throw new Exception("Invalid return type");
+            yield return await ExecuteTask(task);
+            yield break;
+        }
+
+        if (_method.ReturnType.IsAssignableTo(typeof(IAsyncEnumerable<object?>)))
+        {
+            var enumerator = _method.Invoke(_controller, parameters) as IAsyncEnumerable<object?> ??
+                             throw new Exception("Invalid return type");
+            await foreach (var el in enumerator)
+                yield return el;
+            yield break;
+        }
+
+        yield return await Task.Run(() => _method.Invoke(_controller, parameters));
+    }
+
+    public object[] GetParameters(string data, Dictionary<string, string> pathParams,
+        Dictionary<string, string> queryParams)
     {
         var parameters = new List<object>();
         foreach (var parameter in _parameters)
@@ -33,7 +77,8 @@ internal class Handler
                     var body = JsonSerializer.Deserialize(data,
                         typeof(RequestBodyModel<>).MakeGenericType(parameter.DataType));
                     if (body == null)
-                        throw new UnprocessableEntityException($"Request body can not be deserialized as '{parameter.DataType}'");
+                        throw new UnprocessableEntityException(
+                            $"Request body can not be deserialized as '{parameter.DataType}'");
                     parameters.Add(ExtractData(body));
                     break;
                 case Parameter.ParameterType.Path:
@@ -45,13 +90,21 @@ internal class Handler
             }
         }
 
-        var task = _method.Invoke(_controller, parameters.ToArray()) as Task ?? throw new Exception("Invalid return type");
-        return ExecuteTask(task);
+        return parameters.ToArray();
     }
 
     private async Task<object?> ExecuteTask(dynamic task)
     {
         return await task;
+    }
+
+    private async Task<List<object?>> JoinEnumerator(IAsyncEnumerable<object?> enumerator)
+    {
+        var res = new List<object?>();
+        await foreach(var el in enumerator)
+            res.Add(el);
+
+        return res;
     }
 
     private object ExtractData(dynamic request)

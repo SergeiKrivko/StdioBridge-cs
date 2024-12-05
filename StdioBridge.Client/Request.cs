@@ -8,4 +8,5 @@ internal class Request
     [JsonPropertyName("method")] public required string Method { get; init; }
     [JsonPropertyName("url")] public required string Url { get; init; }
     [JsonPropertyName("data")] public object? Data { get; init; }
+    [JsonPropertyName("stream")] public bool Stream { get; set; } = false;
 }

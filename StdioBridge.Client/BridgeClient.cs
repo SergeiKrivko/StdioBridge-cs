@@ -5,11 +5,15 @@ namespace StdioBridge.Client;
 
 public class BridgeClient
 {
-    public ProcessStartInfo StartInfo { get; }
+    private ProcessStartInfo StartInfo { get; }
     public Process? Process { get; private set; }
     private Dictionary<Guid, string> _responses = [];
+    private Dictionary<Guid, StreamResponse> _streams = [];
 
     private const string ResponseMarker = "!response!";
+    private const string StreamStartMarker = "!stream_start!";
+    private const string StreamChunkMarker = "!stream_chunk!";
+    private const string StreamEndMarker = "!stream_end!";
 
     public BridgeClient(ProcessStartInfo startInfo)
     {
@@ -48,6 +52,63 @@ public class BridgeClient
                 {
                 }
             }
+            else if (line?.StartsWith(StreamStartMarker) == true)
+            {
+                try
+                {
+                    var respString = line.AsSpan(StreamStartMarker.Length).ToString();
+                    var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
+                    if (resp != null)
+                        _responses[resp.Id] = respString;
+                }
+                catch (JsonException e)
+                {
+                }
+            }
+            else if (line?.StartsWith(StreamChunkMarker) == true)
+            {
+                try
+                {
+                    var respString = line.AsSpan(StreamChunkMarker.Length).ToString();
+                    var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
+                    if (resp != null)
+                    {
+                        while (!_streams.ContainsKey(resp.Id))
+                        {
+                            await Task.Delay(100);
+                        }
+                        _streams[resp.Id].Buffer.Add(respString);
+                    }
+                }
+                catch (JsonException e)
+                {
+                }
+            }
+            else if (line?.StartsWith(StreamEndMarker) == true)
+            {
+                try
+                {
+                    var respString = line.AsSpan(StreamEndMarker.Length).ToString();
+                    var resp = JsonSerializer.Deserialize<StreamResponse>(respString);
+                    if (resp != null)
+                    {
+                        while (!_streams.ContainsKey(resp.Id))
+                        {
+                            await Task.Delay(100);
+                        }
+                        _streams[resp.Id].Code = resp.Code;
+                        _streams[resp.Id].Finished = true;
+                        _streams.Remove(resp.Id);
+                    }
+                }
+                catch (JsonException e)
+                {
+                }
+            }
+            else
+            {
+                Console.WriteLine(line);
+            }
         }
     }
 
@@ -72,7 +133,7 @@ public class BridgeClient
         catch (JsonException)
         {
         }
-        
+
         _responses.Remove(request.Id);
         if (res != null)
         {
@@ -80,6 +141,43 @@ public class BridgeClient
         }
 
         return new Response<T> { Code = 400, Data = default };
+    }
+
+    private async Task<StreamResponse<T>> SendStreamRequestAsync<T>(Request request)
+    {
+        request.Stream = true;
+        if (Process != null)
+        {
+            await Process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request));
+            await Process.StandardInput.FlushAsync();
+        }
+
+        while (!_responses.ContainsKey(request.Id))
+        {
+            await Task.Delay(200);
+        }
+
+        StreamResponse<T>? res = null;
+        try
+        {
+            var stream = JsonSerializer.Deserialize<StreamResponse>(_responses[request.Id]);
+            if (stream != null)
+                res = new StreamResponse<T>(stream);
+            else
+                res = new StreamResponse<T>(request.Id, 400);
+        }
+        catch (JsonException)
+        {
+        }
+
+        _responses.Remove(request.Id);
+        if (res != null)
+        {
+            _streams.Add(request.Id, res);
+            return res;
+        }
+
+        return new StreamResponse<T>(request.Id, 400);
     }
 
     public async Task<Response<T>> GetAsync<T>(string url, object? data = null)
@@ -99,6 +197,31 @@ public class BridgeClient
 
     public async Task<Response<T>> DeleteAsync<T>(string url, object? data = null)
     {
-        return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
+        return await SendRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
+    }
+
+    public async Task<StreamResponse<T>> GetStreamAsync<T>(string url, object? data = null)
+    {
+        return await SendStreamRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+    }
+
+    public async Task<StreamResponse<T>> PostStreamAsync<T>(string url, object? data = null)
+    {
+        return await SendStreamRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+    }
+
+    public async Task<StreamResponse<T>> PutStreamAsync<T>(string url, object? data = null)
+    {
+        return await SendStreamRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+    }
+
+    public async Task<StreamResponse<T>> DeleteStreamAsync<T>(string url, object? data = null)
+    {
+        return await SendStreamRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
     }
 }

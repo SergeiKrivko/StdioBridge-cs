@@ -59,6 +59,9 @@ public class BridgeApp
     }
 
     private const string ResponsePrefix = "!response!";
+    private const string StreamStartPrefix = "!stream_start!";
+    private const string StreamChunkPrefix = "!stream_chunk!";
+    private const string StreamEndPrefix = "!stream_end!";
 
     private async void ProcessRequest(string line)
     {
@@ -67,7 +70,7 @@ public class BridgeApp
             var request = GetRequest(line);
             if (request.Stream)
             {
-                throw new NotImplementedException();
+                await ProcessStreamRequest(line, request);
             }
             else
             {
@@ -103,6 +106,49 @@ public class BridgeApp
         {
             Console.WriteLine(ResponsePrefix + JsonSerializer.Serialize(new ResponseModel
                 { Id = request.Id, Code = e.Code, Data = new { message = e.Message } }));
+        }
+    }
+
+    private async Task ProcessStreamRequest(string line, RequestModel request)
+    {
+        var started = false;
+        try
+        {
+            var (url, queryParams) = ParseQuery(request.Url);
+            var (handler, pathParams) = _rootRouter.Found(url, request.Method);
+            try
+            {
+                await foreach (var el in handler.CallStream(line, pathParams, queryParams))
+                {
+                    if (!started)
+                    {
+                        Console.WriteLine(StreamStartPrefix + JsonSerializer.Serialize(
+                            new StreamResponseModel { Id = request.Id, Code = 200 }));
+                        started = true;
+                    }
+
+                    Console.WriteLine(StreamChunkPrefix + JsonSerializer.Serialize(
+                        new StreamChunkModel { Id = request.Id, Data = el }));
+                }
+
+                Console.WriteLine(StreamEndPrefix + JsonSerializer.Serialize(
+                    new StreamResponseModel { Id = request.Id, Code = 200 }));
+            }
+            catch (BridgeException)
+            {
+            }
+            catch (Exception e)
+            {
+                throw new InternalServerException(e.Message);
+            }
+        }
+        catch (BridgeException e)
+        {
+            if (!started)
+                Console.WriteLine(StreamStartPrefix + JsonSerializer.Serialize(new StreamResponseModel
+                    { Id = request.Id, Code = e.Code }));
+            Console.WriteLine(StreamEndPrefix + JsonSerializer.Serialize(new StreamResponseModel
+                { Id = request.Id, Code = e.Code }));
         }
     }
 
