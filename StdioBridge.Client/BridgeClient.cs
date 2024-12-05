@@ -210,18 +210,18 @@ public class BridgeClient
     public async Task<StreamResponse<T>> PostStreamAsync<T>(string url, object? data = null)
     {
         return await SendStreamRequestAsync<T>(new Request
-            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+            { Id = Guid.NewGuid(), Url = url, Method = "post", Data = data });
     }
 
     public async Task<StreamResponse<T>> PutStreamAsync<T>(string url, object? data = null)
     {
         return await SendStreamRequestAsync<T>(new Request
-            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+            { Id = Guid.NewGuid(), Url = url, Method = "put", Data = data });
     }
 
     public async Task<StreamResponse<T>> DeleteStreamAsync<T>(string url, object? data = null)
     {
         return await SendStreamRequestAsync<T>(new Request
-            { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+            { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
     }
 }
