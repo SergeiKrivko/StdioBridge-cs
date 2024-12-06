@@ -52,20 +52,6 @@ internal class Parameter
     {
         if (data == null)
             return Default ?? throw new UnprocessableEntityException($"Param '{Name}' missed");
-        if (DataType == typeof(int))
-            return int.Parse(data);
-        if (DataType == typeof(double))
-            return double.Parse(data);
-        if (DataType == typeof(decimal))
-            return decimal.Parse(data);
-        if (DataType == typeof(Guid))
-            return Guid.Parse(data);
-        if (DataType == typeof(DateTime))
-            return DateTime.Parse(data);
-        if (DataType == typeof(DateOnly))
-            return DateOnly.Parse(data);
-        if (DataType == typeof(TimeSpan))
-            return TimeSpan.Parse(data);
-        return data;
+        return Convert.ChangeType(data, DataType);
     }
 }
