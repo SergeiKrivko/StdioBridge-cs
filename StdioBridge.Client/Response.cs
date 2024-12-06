@@ -10,3 +10,8 @@ public class Response<T>
 
     public bool IsSuccessStatusCode => Code < 400;
 }
+
+internal class ErrorMessage
+{
+    [JsonPropertyName("message")] public string? Message { get; init; }
+}

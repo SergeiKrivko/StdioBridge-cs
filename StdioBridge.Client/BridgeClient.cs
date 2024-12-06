@@ -132,6 +132,8 @@ public class BridgeClient
         }
         catch (JsonException)
         {
+            var errorResp = JsonSerializer.Deserialize<Response<ErrorMessage>>(_responses[request.Id]);
+            res = new Response<T>() { Code = errorResp?.Code ?? 400 };
         }
 
         _responses.Remove(request.Id);
@@ -140,7 +142,7 @@ public class BridgeClient
             return res;
         }
 
-        return new Response<T> { Code = 400, Data = default };
+        return new Response<T> { Code = 400 };
     }
 
     private async Task<StreamResponse<T>> SendStreamRequestAsync<T>(Request request)
