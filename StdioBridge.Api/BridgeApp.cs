@@ -11,6 +11,13 @@ public class BridgeApp
 {
     private readonly Router _rootRouter = new Router("");
 
+    public BridgeAppServices Services { get; }
+
+    public BridgeApp()
+    {
+        Services = new BridgeAppServices(this);
+    }
+
     public async Task RunAsync()
     {
         while (true)
@@ -159,7 +166,7 @@ public class BridgeApp
 
     public BridgeApp AddControllers(Assembly assembly)
     {
-        foreach (var controller in GetControllers(assembly).Select(t => new Controller(t)))
+        foreach (var controller in GetControllers(assembly).Select(t => new Controller(Services.CreateServiceInstance(t))))
         {
             _rootRouter.Add(controller.Url?.Split('/').ToList() ?? [], controller.Router);
         }

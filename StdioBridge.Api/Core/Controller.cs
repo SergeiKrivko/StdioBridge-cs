@@ -9,11 +9,11 @@ internal class Controller
     private Type _type;
     private object _controller;
     
-    public Controller(Type type)
+    public Controller(object controller)
     {
-        _type = type;
-        _controller = Activator.CreateInstance(type) ?? throw new Exception($"Can not create controller '{_type}'");
-        var attr = type.GetCustomAttributes(typeof(BridgeControllerAttribute), true).First();
+        _type = controller.GetType();
+        _controller = controller;
+        var attr = _type.GetCustomAttributes(typeof(BridgeControllerAttribute), true).First();
         if (attr is not BridgeControllerAttribute attribute)
             throw new Exception();
         Url = attribute.Url;

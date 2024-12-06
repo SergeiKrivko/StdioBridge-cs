@@ -1,15 +1,14 @@
 ﻿using System.Reflection;
 using System.Text.Json;
-using StdioBridge.Api.Attributes;
 using StdioBridge.Api.Exceptions;
 
 namespace StdioBridge.Api.Core;
 
 internal class Handler
 {
-    private MethodInfo _method;
-    private object _controller;
-    private List<Parameter> _parameters = [];
+    private readonly MethodInfo _method;
+    private readonly object _controller;
+    private readonly List<Parameter> _parameters = [];
 
     public Handler(object controller, MethodInfo method)
     {
@@ -65,7 +64,7 @@ internal class Handler
         yield return await Task.Run(() => _method.Invoke(_controller, parameters));
     }
 
-    public object[] GetParameters(string data, Dictionary<string, string> pathParams,
+    private object[] GetParameters(string data, Dictionary<string, string> pathParams,
         Dictionary<string, string> queryParams)
     {
         var parameters = new List<object>();
