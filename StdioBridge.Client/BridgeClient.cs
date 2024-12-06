@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
+using StdioBridge.Client.Exceptions;
 
 namespace StdioBridge.Client;
 
@@ -112,7 +113,7 @@ public class BridgeClient
         }
     }
 
-    private async Task<Response<T>> SendRequestAsync<T>(Request request)
+    private async Task<Response> SendRequestAsync(Request request)
     {
         if (Process != null)
         {
@@ -125,24 +126,24 @@ public class BridgeClient
             await Task.Delay(200);
         }
 
-        Response<T>? res = null;
+        var source = _responses[request.Id];
+        _responses.Remove(request.Id);
+        Response? res = null;
         try
         {
-            res = JsonSerializer.Deserialize<Response<T>>(_responses[request.Id]);
+            res = JsonSerializer.Deserialize<Response>(source);
         }
         catch (JsonException)
         {
-            var errorResp = JsonSerializer.Deserialize<Response<ErrorMessage>>(_responses[request.Id]);
-            res = new Response<T>() { Code = errorResp?.Code ?? 400 };
         }
 
-        _responses.Remove(request.Id);
         if (res != null)
         {
+            res.Source = source;
             return res;
         }
 
-        return new Response<T> { Code = 400 };
+        return new Response { Code = 400 };
     }
 
     private async Task<StreamResponse<T>> SendStreamRequestAsync<T>(Request request)
@@ -182,25 +183,53 @@ public class BridgeClient
         return new StreamResponse<T>(request.Id, 400);
     }
 
-    public async Task<Response<T>> GetAsync<T>(string url, object? data = null)
+    private async Task<T?> SendRequestAsync<T>(Request request)
+    {
+        var response = await SendRequestAsync(request);
+        if (!response.IsSuccessStatusCode)
+            throw new BridgeException(response.Code);
+        return response.GetData<T>();
+    }
+
+    public async Task<Response> GetAsync(string url, object? data = null)
+    {
+        return await SendRequestAsync(new Request { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
+    }
+
+    public async Task<Response> PostAsync(string url, object? data)
+    {
+        return await SendRequestAsync(new Request { Id = Guid.NewGuid(), Url = url, Method = "post", Data = data });
+    }
+
+    public async Task<Response> PutAsync(string url, object? data)
+    {
+        return await SendRequestAsync(new Request { Id = Guid.NewGuid(), Url = url, Method = "put", Data = data });
+    }
+
+    public async Task<Response> DeleteAsync(string url, object? data = null)
+    {
+        return await SendRequestAsync(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
+    }
+
+    public async Task<T?> GetAsync<T>(string url, object? data = null)
     {
         return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "get", Data = data });
     }
 
-    public async Task<Response<T>> PostAsync<T>(string url, object? data)
+    public async Task<T?> PostAsync<T>(string url, object? data)
     {
         return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "post", Data = data });
     }
 
-    public async Task<Response<T>> PutAsync<T>(string url, object? data)
+    public async Task<T?> PutAsync<T>(string url, object? data)
     {
         return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "put", Data = data });
     }
 
-    public async Task<Response<T>> DeleteAsync<T>(string url, object? data = null)
+    public async Task<T?> DeleteAsync<T>(string url, object? data = null)
     {
-        return await SendRequestAsync<T>(new Request
-            { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
+        return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
     }
 
     public async Task<StreamResponse<T>> GetStreamAsync<T>(string url, object? data = null)
