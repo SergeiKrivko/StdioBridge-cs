@@ -1,15 +1,16 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
+using StdioBridge.Client.Core;
 using StdioBridge.Client.Exceptions;
 
 namespace StdioBridge.Client;
 
 public class BridgeClient
 {
-    private ProcessStartInfo StartInfo { get; }
-    public Process? Process { get; private set; }
-    private Dictionary<Guid, string> _responses = [];
-    private Dictionary<Guid, StreamResponse> _streams = [];
+    private readonly Dictionary<Guid, string> _responses = [];
+    private readonly Dictionary<Guid, StreamResponse> _streams = [];
+
+    private readonly IBrideClientStream _stream;
 
     private const string ResponseMarker = "!response!";
     private const string StreamStartMarker = "!stream_start!";
@@ -18,108 +19,103 @@ public class BridgeClient
 
     public BridgeClient(ProcessStartInfo startInfo)
     {
-        StartInfo = startInfo;
-        StartProcess();
+        _stream = new ProcessBridgeStream(startInfo);
+        _stream.OnNewLine += ProcessLine;
     }
 
-    private void StartProcess()
+    public BridgeClient(Stream stream)
     {
-        StartInfo.RedirectStandardInput = true;
-        StartInfo.RedirectStandardOutput = true;
-        StartInfo.UseShellExecute = false;
-        var proc = Process.Start(StartInfo);
-        if (proc == null)
-            return;
-        Process = proc;
-        ReadOutputLoop();
+        _stream = new StreamBrideStream(stream);
+        _stream.OnNewLine += ProcessLine;
     }
 
-    private async void ReadOutputLoop()
+    public BridgeClient(IBrideClientStream stream)
     {
-        var processId = Process?.Id;
-        while (Process != null && Process.Id == processId)
+        _stream = stream;
+        _stream.OnNewLine += ProcessLine;
+    }
+
+    public event Action<string>? OnLog; 
+
+    private async void ProcessLine(string line)
+    {
+        if (line.StartsWith(ResponseMarker))
         {
-            var line = await Process.StandardOutput.ReadLineAsync();
-            if (line?.StartsWith(ResponseMarker) == true)
+            try
             {
-                try
-                {
-                    var respString = line.AsSpan(ResponseMarker.Length).ToString();
-                    var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
-                    if (resp != null)
-                        _responses[resp.Id] = respString;
-                }
-                catch (JsonException e)
-                {
-                }
+                var respString = line.AsSpan(ResponseMarker.Length).ToString();
+                var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
+                if (resp != null)
+                    _responses[resp.Id] = respString;
             }
-            else if (line?.StartsWith(StreamStartMarker) == true)
+            catch (JsonException)
             {
-                try
-                {
-                    var respString = line.AsSpan(StreamStartMarker.Length).ToString();
-                    var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
-                    if (resp != null)
-                        _responses[resp.Id] = respString;
-                }
-                catch (JsonException e)
-                {
-                }
             }
-            else if (line?.StartsWith(StreamChunkMarker) == true)
+        }
+        else if (line.StartsWith(StreamStartMarker))
+        {
+            try
             {
-                try
+                var respString = line.AsSpan(StreamStartMarker.Length).ToString();
+                var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
+                if (resp != null)
+                    _responses[resp.Id] = respString;
+            }
+            catch (JsonException)
+            {
+            }
+        }
+        else if (line.StartsWith(StreamChunkMarker))
+        {
+            try
+            {
+                var respString = line.AsSpan(StreamChunkMarker.Length).ToString();
+                var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
+                if (resp != null)
                 {
-                    var respString = line.AsSpan(StreamChunkMarker.Length).ToString();
-                    var resp = JsonSerializer.Deserialize<BaseResponse>(respString);
-                    if (resp != null)
+                    while (!_streams.ContainsKey(resp.Id))
                     {
-                        while (!_streams.ContainsKey(resp.Id))
-                        {
-                            await Task.Delay(100);
-                        }
-                        _streams[resp.Id].Buffer.Add(respString);
+                        await Task.Delay(100);
                     }
-                }
-                catch (JsonException e)
-                {
+
+                    _streams[resp.Id].Buffer.Add(respString);
                 }
             }
-            else if (line?.StartsWith(StreamEndMarker) == true)
+            catch (JsonException)
             {
-                try
+            }
+        }
+        else if (line.StartsWith(StreamEndMarker))
+        {
+            try
+            {
+                var respString = line.AsSpan(StreamEndMarker.Length).ToString();
+                var resp = JsonSerializer.Deserialize<StreamResponse>(respString);
+                if (resp != null)
                 {
-                    var respString = line.AsSpan(StreamEndMarker.Length).ToString();
-                    var resp = JsonSerializer.Deserialize<StreamResponse>(respString);
-                    if (resp != null)
+                    while (!_streams.ContainsKey(resp.Id))
                     {
-                        while (!_streams.ContainsKey(resp.Id))
-                        {
-                            await Task.Delay(100);
-                        }
-                        _streams[resp.Id].Code = resp.Code;
-                        _streams[resp.Id].Finished = true;
-                        _streams.Remove(resp.Id);
+                        await Task.Delay(100);
                     }
-                }
-                catch (JsonException e)
-                {
+
+                    _streams[resp.Id].Code = resp.Code;
+                    _streams[resp.Id].Finished = true;
+                    _streams.Remove(resp.Id);
                 }
             }
-            else
+            catch (JsonException)
             {
-                Console.WriteLine(line);
             }
+        }
+        else
+        {
+            OnLog?.Invoke(line);
         }
     }
 
     private async Task<Response> SendRequestAsync(Request request)
     {
-        if (Process != null)
-        {
-            await Process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request));
-            await Process.StandardInput.FlushAsync();
-        }
+        await _stream.WriteLineAsync(JsonSerializer.Serialize(request));
 
         while (!_responses.ContainsKey(request.Id))
         {
@@ -149,11 +145,7 @@ public class BridgeClient
     private async Task<StreamResponse<T>> SendStreamRequestAsync<T>(Request request)
     {
         request.Stream = true;
-        if (Process != null)
-        {
-            await Process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request));
-            await Process.StandardInput.FlushAsync();
-        }
+        await _stream.WriteLineAsync(JsonSerializer.Serialize(request));
 
         while (!_responses.ContainsKey(request.Id))
         {
@@ -229,7 +221,8 @@ public class BridgeClient
 
     public async Task<T?> DeleteAsync<T>(string url, object? data = null)
     {
-        return await SendRequestAsync<T>(new Request { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
+        return await SendRequestAsync<T>(new Request
+            { Id = Guid.NewGuid(), Url = url, Method = "delete", Data = data });
     }
 
     public async Task<StreamResponse<T>> GetStreamAsync<T>(string url, object? data = null)

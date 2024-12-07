@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace StdioBridge.Client;
+namespace StdioBridge.Client.Core;
 
 internal class Request
 {
